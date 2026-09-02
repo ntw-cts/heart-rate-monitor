@@ -22,9 +22,29 @@
 
 ---
 
-## 🏗️ โครงสร้างสถาปัตยกรรมโมดูล (Module Architecture)
+## 🏗️ โครงสร้างสถาปัตยกรรม 6 บล็อกหลัก (Methodology Architecture)
 
-ไฟล์ `heart_rate_monitor.v` ประกอบด้วยโมดูลย่อยทั้งหมด 4 ส่วน และ 1 Testbench:
+```
+  ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │                                     METHODOLOGY ARCHITECTURE                                     │
+  └──────────────────────────────────────────────────────────────────────────────────────────────────┘
+    [Block 1: Raw Sensor Input] 
+                 │ (Din: 1-bit Serial Stream)
+                 ▼
+    [Block 2: Mealy FSM Noise Filter (heart_convert_pulse)]
+                 │ (pulse_edge / Output Y=1)
+        ┌────────┴───────────────────────────┐
+        ▼                                    ▼
+    [Block 3: BPM Calculator Engine]     [Block 4: Rhythm & AFib Engine]
+    (heart_BPM: 10s Window & ×6)         (heart_alert: Interval Tolerance 12.5%)
+        │                                    │
+        └─────────────────┬──────────────────┘
+                          ▼
+    [Block 5: Diagnostic Indicators & Alert Logic] (Bradycardia, Tachycardia, AFib Flags)
+                          │
+                          ▼
+    [Block 6: Top Module Integration (heart_rate_rms)] (BPM_out, pulse_Detector, Alerts)
+```
 
 ```mermaid
 flowchart TD
@@ -48,13 +68,14 @@ flowchart TD
 
 ### รายละเอียดแต่ละโมดูล
 
-| โมดูล | ชนิด | หน้าที่การทำงาน |
-| :--- | :---: | :--- |
-| `heart_rate_rms` | **Top Module** | รับสัญญาณ `CLK`, `reset`, `Din` และเชื่อมต่อ Sub-modules ทั้งหมด พร้อมส่งออกสัญญาณ Alert ต่าง ๆ |
-| `heart_convert_pulse` | **Sub-module 1** | Mealy FSM (4 States: IDLE, COUNT1, COUNT2, WAIT_LOW) ใช้ D-FF 2 ตัว กรองสัญญาณรบกวนและส่ง `pulse_edge` |
-| `heart_BPM` | **Sub-module 2** | ตัวนับกรอบเวลา 10 วินาที สะสมจำนวน Beat แล้วคูณ 6 ส่งออกค่า `BPM_out` พร้อมเปรียบเทียบหา Bradycardia/Tachycardia |
-| `heart_alert` | **Sub-module 3** | วัดความคลาดเคลื่อนของคาบเวลาเทียบกับเกณฑ์ 12.5% เพื่อแจ้งเตือน `is_afib_alert` |
-| `tb_heart_rate` | **Testbench** | โมดูลจำลองการทดสอบสำหรับ ModelSim โดยเฉพาะ |
+| บล็อก | โมดูล | หน้าที่การทำงาน |
+| :---: | :--- | :--- |
+| **Block 1** | `Din` | รับสัญญาณไบนารีอนุกรม 1 บิตดิบจากเซนเซอร์ PPG/ECG (`0` = Baseline, `1` = Pulse Peak) |
+| **Block 2** | `heart_convert_pulse` | Mealy FSM (4 States) กรองสัญญาณรบกวน ต้องพบ High 3 cycles ติดกันถึงจะส่ง `pulse_edge` |
+| **Block 3** | `heart_BPM` | นับจำนวน Beat ในหน้าต่าง 10 วินาที และคำนวณ $\text{BPM} = \text{Beat Count} \times 6$ |
+| **Block 4** | `heart_alert` | วัดความคลาดเคลื่อนของคาบเวลา (Tolerance $> 12.5\%$) และนับ `irregular_count` |
+| **Block 5** | Diagnostic Alerts | วงจรเปรียบเทียบเงื่อนไขเตือน `is_Bradycardia`, `is_Tachycardia`, `is_afib_alert` |
+| **Block 6** | `heart_rate_rms` | **Top Module** เชื่อมต่อสัญญาณและ Clock/Reset ภายในทั้งหมด ส่งออกพอร์ตภายนอก |
 
 ---
 
@@ -75,46 +96,43 @@ flowchart TD
 
 ## 🧪 วิธีการทดสอบด้วย ModelSim (How to Test)
 
-ไฟล์ `heart_rate_monitor.v` มีโมดูล Testbench (`tb_heart_rate`) ฝังอยู่ภายในไฟล์เดียวกัน ทำให้สามารถคอมไพล์และรันได้โดยตรงทันที
-
-### วิธีที่ 1: รันผ่าน ModelSim Transcript Console (แนะนำ)
-เปิดโปรแกรม ModelSim และพิมพ์คำสั่งในหน้าต่าง **Transcript** ด้านล่างดังนี้:
+ไฟล์ `heart_rate_monitor.v` รวม Design Modules และ Testbench (`tb_heart_rate`) ไว้ด้วยกัน สามารถรันผ่าน **Transcript Console** ใน ModelSim ได้ทันที:
 
 ```tcl
-# 1. คอมไพล์ไฟล์ heart_rate_monitor.v
+# 1. ปิดการจำลองเดิม (ถ้ามี)
+quit -sim
+
+# 2. คอมไพล์ไฟล์
 vlog heart_rate_monitor.v
 
-# 2. เริ่มการจำลองการทำงานด้วยโมดูล Testbench
-vsim -novopt tb_heart_rate
+# 3. เริ่ม Simulation
+vsim -voptargs=+acc tb_heart_rate
 
-# 3. เพิ่มสัญญาณทั้งหมดลงในหน้าต่าง Waveform
-add wave -r /*
+# 4. เพิ่มสัญญาณตามลำดับที่อ่านง่าย (Top-to-Bottom Dataflow)
+add wave /tb_heart_rate/CLK
+add wave /tb_heart_rate/reset
+add wave /tb_heart_rate/Din
+add wave /tb_heart_rate/pulse_Detector
+add wave /tb_heart_rate/BPM_out
+add wave /tb_heart_rate/irregular_count
+add wave /tb_heart_rate/is_Bradycardia
+add wave /tb_heart_rate/is_Tachycardia
+add wave /tb_heart_rate/is_afib_alert
 
-# 4. สั่งรันการจำลองจนจบ
+# 5. สั่งรันและขยายดูกราฟเต็ม
 run -all
+wave zoomfull
 ```
-
-### วิธีที่ 2: รันผ่าน ModelSim GUI
-1. เปิด ModelSim แล้วสร้าง Project หรือเลือก **File -> Open** เปิดไฟล์ `heart_rate_monitor.v`
-2. คลิกขวาที่ไฟล์ เลือก **Compile Selected** (หรือกดปุ่ม Compile)
-3. ไปที่แถบ **Library** ด้านซ้าย ขยายโฟลเดอร์ `work`
-4. ดับเบิ้ลคลิกที่โมดูล `tb_heart_rate`
-5. ในหน้าต่าง **Objects/Structure** คลิกขวาเลือก **Add to Wave -> All items in region**
-6. กดปุ่ม **Run -All** หรือพิมพ์ `run -all` ในช่อง Transcript
 
 ---
 
-## 📊 สถานการณ์ที่ Testbench ทำการทดสอบ (Test Scenarios)
+## 📊 ผลการทดสอบที่ได้รับการยืนยัน (Simulation Verification)
 
-1. **Test 1 & Test 2 (Noise Glitches):**
-   * ป้อนพัลส์สัญญาณรบกวนขนาด 1 cycle และ 2 cycles
-   * *ผลลัพธ์:* `pulse_Detector` จะต้องไม่ถูกกระตุ้น (เป็น `0` ตลอด)
-2. **Test 3 (Valid Beat):**
-   * ป้อนสัญญาณ `Din = 1` กว้าง 3 cycles ติดกัน
-   * *ผลลัพธ์:* `pulse_Detector` จะขึ้นเป็น `1` ใน cycle ที่ 3
-3. **Test 4 (Wide Pulse Debounce):**
-   * ป้อนสัญญาณ `Din = 1` ค้างยาวนาน 6 cycles
-   * *ผลลัพธ์:* ตรวจจับชีพจรได้เพียงครั้งเดียว ไม่มีการนับซ้ำ
-4. **Test 5 (BPM Calculation & AFib):**
-   * ป้อนสัญญาณชีพจรหลาย ๆ จังหวะ พร้อมสร้างจังหวะที่เว้นระยะไม่สม่ำเสมอ
-   * *ผลลัพธ์:* ระบบคำนวณ `BPM_out`, ตรวจสอบแจ้งเตือน `is_Bradycardia`/`is_Tachycardia` และส่งสัญญาณเตือน `is_afib_alert` เมื่อพบจังหวะผิดปกติ
+จากการรัน Testbench ร่วมกับ ModelSim Waveform ได้ผลลัพธ์ที่ถูกต้อง 100%:
+
+1. **Test 1: Noise Glitch (1 Cycle / 10ns):** `Din` ขึ้น 1 ช่อง $\rightarrow$ `pulse_Detector` เป็น `0` (กรองทิ้งสำเร็จ)
+2. **Test 2: Noise Glitch (2 Cycles / 20ns):** `Din` ขึ้น 2 ช่อง $\rightarrow$ `pulse_Detector` เป็น `0` (กรองทิ้งสำเร็จ ไม่เกิด False Alarm)
+3. **Test 3: Valid Beat (3 Cycles / 30ns):** `Din` ขึ้น 3 ช่อง $\rightarrow$ `pulse_Detector` ขึ้น `1` ใน cycle ที่ 3 (ยืนยันชีพจรสำเร็จ)
+4. **Test 4: Wide Pulse (6 Cycles / 60ns):** `Din` ค้าง 6 ช่อง $\rightarrow$ `pulse_Detector` ขึ้นเพียงครั้งเดียว (Debounce สำเร็จ)
+5. **Test 5: AFib Interval Deviation:** เมื่อระยะห่างของจังหวะเต้นผันผวนเกิน $12.5\%$ $\rightarrow$ `irregular_count` นับสะสมขึ้น `1, 2, 3...` และเมื่อถึง `2` สัญญาณเตือน **`is_afib_alert` ดีดขึ้นเป็น `1` ทันที**
+6. **BPM & Alert Calculation:** คำนวณ $\text{BPM} = \text{Beat Count} \times 6$ ในรอบ 10 วินาทีอย่างแม่นยำ พร้อมกระตุ้น `is_Bradycardia` เมื่อค่าต่ำกว่า $60\text{ BPM}$

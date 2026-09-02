@@ -126,17 +126,20 @@ wave zoomfull
 
 ---
 
-## 📊 สถานการณ์ที่ Testbench ทำการทดสอบ (Test Scenarios)
+## 📊 Test Scenarios & Verification
 
-1. **Test 1 & Test 2 (Noise Glitches):**
-   * ป้อนพัลส์สัญญาณรบกวนขนาด 1 cycle และ 2 cycles
-   * *ผลลัพธ์:* `pulse_Detector` จะต้องไม่ถูกกระตุ้น (เป็น `0` ตลอด)
-2. **Test 3 (Valid Beat):**
-   * ป้อนสัญญาณ `Din = 1` กว้าง 3 cycles ติดกัน
-   * *ผลลัพธ์:* `pulse_Detector` จะขึ้นเป็น `1` ใน cycle ที่ 3
-3. **Test 4 (Wide Pulse Debounce):**
-   * ป้อนสัญญาณ `Din = 1` ค้างยาวนาน 6 cycles
-   * *ผลลัพธ์:* ตรวจจับชีพจรได้เพียงครั้งเดียว ไม่มีการนับซ้ำ
-4. **Test 5 & Test 6 (BPM Calculation & AFib):**
-   * ป้อนสัญญาณชีพจรหลาย ๆ จังหวะ พร้อมสร้างจังหวะที่เว้นระยะไม่สม่ำเสมอ
-   * *ผลลัพธ์:* ระบบคำนวณ `BPM_out`, ตรวจสอบแจ้งเตือน `is_Bradycardia`/`is_Tachycardia` และส่งสัญญาณเตือน `is_afib_alert` เมื่อพบจังหวะผิดปกติ
+1. **Test 1 & Test 2: Noise Glitch Filtering (1 & 2 Clock Cycles)**
+   * **Stimulus:** Inject transient noise spikes of 1 clock cycle (10ns) and 2 clock cycles (20ns).
+   * **Expected Result:** `pulse_Detector` remains strictly `0` (all glitches are successfully rejected by the Mealy FSM).
+
+2. **Test 3: Valid Heartbeat Detection (3 Clock Cycles)**
+   * **Stimulus:** Apply a valid pulse signal with `Din = 1` for 3 consecutive clock cycles (30ns).
+   * **Expected Result:** `pulse_Detector` asserts High (`1`) on the 3rd clock cycle (true beat authenticated).
+
+3. **Test 4: Wide Pulse Debouncing (6 Clock Cycles)**
+   * **Stimulus:** Apply a wide pulse with `Din = 1` held continuously High for 6 clock cycles (60ns).
+   * **Expected Result:** Triggers exactly once on the 3rd cycle and enters `WAIT_LOW` (prevents multiple counts of the same beat).
+
+4. **Test 5 & Test 6: Continuous Beats, Real-Time BPM & Arrhythmia/AFib Alert**
+   * **Stimulus:** Apply a continuous train of pulses with fluctuating inter-beat intervals (deviation $> 12.5\%$) leading into the active observation window.
+   * **Expected Result:** The hardware calculates active `BPM_out`, evaluates `is_Bradycardia` / `is_Tachycardia`, increments `irregular_count`, and asserts `is_afib_alert = 1`.

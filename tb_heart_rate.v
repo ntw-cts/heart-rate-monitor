@@ -33,7 +33,7 @@ module tb_heart_rate;
         #5 CLK = ~CLK;
     end
 
-    // Stimulus process for ModelSim
+    // Stimulus Process
     initial begin
         // ----------------------------------------------------
         // Step 0: Initialize and Reset
@@ -47,7 +47,7 @@ module tb_heart_rate;
         $display("[Time %0t ns] Reset released. Starting simulation...", $time);
 
         // ----------------------------------------------------
-        // Test 1: Noise Glitch (1 clock cycle) -> Should be filtered
+        // Test 1: Noise Glitch (1 clock cycle: 10ns) -> Filtered
         // ----------------------------------------------------
         $display("[Time %0t ns] Test 1: 1-cycle noise glitch", $time);
         Din = 1;
@@ -56,7 +56,7 @@ module tb_heart_rate;
         #30;
 
         // ----------------------------------------------------
-        // Test 2: Noise Glitch (2 clock cycles) -> Should be filtered
+        // Test 2: Noise Glitch (2 clock cycles: 20ns) -> Filtered
         // ----------------------------------------------------
         $display("[Time %0t ns] Test 2: 2-cycle noise glitch", $time);
         Din = 1;
@@ -65,7 +65,7 @@ module tb_heart_rate;
         #30;
 
         // ----------------------------------------------------
-        // Test 3: Valid Pulse (3 clock cycles) -> Should detect 1 beat
+        // Test 3: Valid Pulse (3 clock cycles: 30ns) -> 1 beat detected
         // ----------------------------------------------------
         $display("[Time %0t ns] Test 3: Valid 3-cycle pulse (Beat 1)", $time);
         Din = 1;
@@ -74,7 +74,7 @@ module tb_heart_rate;
         #40;
 
         // ----------------------------------------------------
-        // Test 4: Wide Pulse (6 clock cycles) -> Debounce check
+        // Test 4: Wide Pulse (6 clock cycles: 60ns) -> Debounced
         // ----------------------------------------------------
         $display("[Time %0t ns] Test 4: Wide pulse (Beat 2)", $time);
         Din = 1;
@@ -83,29 +83,34 @@ module tb_heart_rate;
         #40;
 
         // ----------------------------------------------------
-        // Test 5: Simulating multiple beats and irregular intervals
+        // Test 5 & 6: Active Heartbeats with Irregular Intervals (AFib Check)
         // ----------------------------------------------------
-        $display("[Time %0t ns] Test 5: Beat train and AFib check", $time);
+        $display("[Time %0t ns] Test 5 & 6: Continuous heartbeats with AFib arrhythmia...", $time);
 
-        // Beat 3
+        // Beat 3 (baseline interval = 40ns)
         Din = 1; #30; Din = 0; #40;
 
-        // Beat 4
+        // Beat 4 (regular interval = 40ns)
         Din = 1; #30; Din = 0; #40;
 
-        // Beat 5 (Long interval)
-        #80;
-        Din = 1; #30; Din = 0; #40;
+        // Beat 5 (Long irregular interval = 90ns -> AFib Trigger 1)
+        #90;
+        Din = 1; #30; Din = 0; #30;
 
-        // Beat 6 (Irregular interval)
-        #120;
-        Din = 1; #30; Din = 0; #40;
-
-        // Beat 7 (Short interval)
+        // Beat 6 (Short irregular interval = 30ns -> AFib Trigger 2: Alert ON!)
         #30;
-        Din = 1; #30; Din = 0; #40;
+        Din = 1; #30; Din = 0; #80;
 
-        #200;
+        // Beat 7 (Long irregular interval = 80ns -> AFib Trigger 3: Alert stays ON!)
+        #80;
+        Din = 1; #30; Din = 0; #30;
+
+        // Beat 8 (Active pulse right into final window -> BPM > 0 and AFib stays ON!)
+        #30;
+        Din = 1; #30; Din = 0; #30;
+
+        // Latch final calculation
+        #40;
 
         $display("--------------------------------------------------");
         $display("Simulation Finished Successfully");
@@ -116,7 +121,7 @@ module tb_heart_rate;
         $display("is_afib_alert   = %b", is_afib_alert);
         $display("--------------------------------------------------");
 
-        // Use $stop for ModelSim to keep the waveform and transcript window open
+        // Use $stop for ModelSim to keep waveform window open
         $stop;
     end
 

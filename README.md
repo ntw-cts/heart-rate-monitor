@@ -126,13 +126,17 @@ wave zoomfull
 
 ---
 
-## 📊 ผลการทดสอบที่ได้รับการยืนยัน (Simulation Verification)
+## 📊 สถานการณ์ที่ Testbench ทำการทดสอบ (Test Scenarios)
 
-จากการรัน Testbench ร่วมกับ ModelSim Waveform ได้ผลลัพธ์ที่ถูกต้อง 100%:
-
-1. **Test 1: Noise Glitch (1 Cycle / 10ns):** `Din` ขึ้น 1 ช่อง $\rightarrow$ `pulse_Detector` เป็น `0` (กรองทิ้งสำเร็จ)
-2. **Test 2: Noise Glitch (2 Cycles / 20ns):** `Din` ขึ้น 2 ช่อง $\rightarrow$ `pulse_Detector` เป็น `0` (กรองทิ้งสำเร็จ ไม่เกิด False Alarm)
-3. **Test 3: Valid Beat (3 Cycles / 30ns):** `Din` ขึ้น 3 ช่อง $\rightarrow$ `pulse_Detector` ขึ้น `1` ใน cycle ที่ 3 (ยืนยันชีพจรสำเร็จ)
-4. **Test 4: Wide Pulse (6 Cycles / 60ns):** `Din` ค้าง 6 ช่อง $\rightarrow$ `pulse_Detector` ขึ้นเพียงครั้งเดียว (Debounce สำเร็จ)
-5. **Test 5: AFib Interval Deviation:** เมื่อระยะห่างของจังหวะเต้นผันผวนเกิน $12.5\%$ $\rightarrow$ `irregular_count` นับสะสมขึ้น `1, 2, 3...` และเมื่อถึง `2` สัญญาณเตือน **`is_afib_alert` ดีดขึ้นเป็น `1` ทันที**
-6. **BPM & Alert Calculation:** คำนวณ $\text{BPM} = \text{Beat Count} \times 6$ ในรอบ 10 วินาทีอย่างแม่นยำ พร้อมกระตุ้น `is_Bradycardia` เมื่อค่าต่ำกว่า $60\text{ BPM}$
+1. **Test 1 & Test 2 (Noise Glitches):**
+   * ป้อนพัลส์สัญญาณรบกวนขนาด 1 cycle และ 2 cycles
+   * *ผลลัพธ์:* `pulse_Detector` จะต้องไม่ถูกกระตุ้น (เป็น `0` ตลอด)
+2. **Test 3 (Valid Beat):**
+   * ป้อนสัญญาณ `Din = 1` กว้าง 3 cycles ติดกัน
+   * *ผลลัพธ์:* `pulse_Detector` จะขึ้นเป็น `1` ใน cycle ที่ 3
+3. **Test 4 (Wide Pulse Debounce):**
+   * ป้อนสัญญาณ `Din = 1` ค้างยาวนาน 6 cycles
+   * *ผลลัพธ์:* ตรวจจับชีพจรได้เพียงครั้งเดียว ไม่มีการนับซ้ำ
+4. **Test 5 & Test 6 (BPM Calculation & AFib):**
+   * ป้อนสัญญาณชีพจรหลาย ๆ จังหวะ พร้อมสร้างจังหวะที่เว้นระยะไม่สม่ำเสมอ
+   * *ผลลัพธ์:* ระบบคำนวณ `BPM_out`, ตรวจสอบแจ้งเตือน `is_Bradycardia`/`is_Tachycardia` และส่งสัญญาณเตือน `is_afib_alert` เมื่อพบจังหวะผิดปกติ

@@ -126,20 +126,20 @@ wave zoomfull
 
 ---
 
-## 📊 Test Scenarios & Verification
+## 📊 สถานการณ์ที่ Testbench ทำการทดสอบ (Test Scenarios)
 
-1. **Test 1 & Test 2: Noise Glitch Filtering (1 & 2 Clock Cycles)**
-   * **Stimulus:** Inject transient noise spikes of 1 clock cycle (10ns) and 2 clock cycles (20ns).
-   * **Expected Result:** `pulse_Detector` remains strictly `0` (all glitches are successfully rejected by the Mealy FSM).
+1. **Test 1 & Test 2: การกรองสัญญาณรบกวน (Noise Glitches 1 และ 2 Cycles)**
+   * **การป้อนสัญญาณ:** ป้อนพัลส์สัญญาณรบกวนขนาด 1 cycle (10ns) และ 2 cycles (20ns)
+   * **ผลลัพธ์:** `pulse_Detector` จะต้องเป็น `0` ตลอดช่วง (FSM กรอง Noise ทิ้งได้สำเร็จ)
 
-2. **Test 3: Valid Heartbeat Detection (3 Clock Cycles)**
-   * **Stimulus:** Apply a valid pulse signal with `Din = 1` for 3 consecutive clock cycles (30ns).
-   * **Expected Result:** `pulse_Detector` asserts High (`1`) on the 3rd clock cycle (true beat authenticated).
+2. **Test 3: การตรวจจับชีพจรจริง (Valid Beat 3 Cycles)**
+   * **การป้อนสัญญาณ:** ป้อนสัญญาณ `Din = 1` ต่อเนื่องกัน 3 cycles (30ns)
+   * **ผลลัพธ์:** `pulse_Detector` จะดีดขึ้นเป็น `1` ใน cycle ที่ 3 (ยืนยันว่าเป็นจังหวะเต้นจริง)
 
-3. **Test 4: Wide Pulse Debouncing (6 Clock Cycles)**
-   * **Stimulus:** Apply a wide pulse with `Din = 1` held continuously High for 6 clock cycles (60ns).
-   * **Expected Result:** Triggers exactly once on the 3rd cycle and enters `WAIT_LOW` (prevents multiple counts of the same beat).
+3. **Test 4: การป้องกันการนับซ้ำจากพัลส์กว้าง (Wide Pulse Debounce 6 Cycles)**
+   * **การป้อนสัญญาณ:** ป้อนสัญญาณ `Din = 1` ค้างยาวนาน 6 cycles (60ns)
+   * **ผลลัพธ์:** ตรวจจับได้เพียงครั้งเดียวใน cycle ที่ 3 และเข้าสู่สถานะ `WAIT_LOW` เพื่อไม่ให้นับซ้ำ
 
-4. **Test 5 & Test 6: Continuous Beats, Real-Time BPM & Arrhythmia/AFib Alert**
-   * **Stimulus:** Apply a continuous train of pulses with fluctuating inter-beat intervals (deviation $> 12.5\%$) leading into the active observation window.
-   * **Expected Result:** The hardware calculates active `BPM_out`, evaluates `is_Bradycardia` / `is_Tachycardia`, increments `irregular_count`, and asserts `is_afib_alert = 1`.
+4. **Test 5 & Test 6: การนับ BPM และตรวจจับจังหวะเต้นผิดปกติ (BPM & AFib Alert)**
+   * **การป้อนสัญญาณ:** ป้อนพัลส์ชีพจรต่อเนื่องโดยสร้างระยะห่างระหว่างจังหวะเต้นไม่สม่ำเสมอ (ความคลาดเคลื่อน $> 12.5\%$) เข้าสู่หน้าต่างสังเกตการณ์
+   * **ผลลัพธ์:** ระบบคำนวณ `BPM_out` ได้ถูกต้อง, ตรวจสอบภาวะ `is_Bradycardia`/`is_Tachycardia`, สะสมค่า `irregular_count` และเปิดสัญญาณเตือน `is_afib_alert = 1` เมื่อพบจังหวะผิดปกติสะสม

@@ -75,7 +75,7 @@ module heart_convert_pulse(
     input  wire CLK,
     input  wire reset,
     input  wire Din,
-    output wire pulse_edge 
+    output reg  pulse_edge 
 );
     // State definitions (Q1Q0)
     localparam IDLE     = 2'b00;
@@ -85,12 +85,19 @@ module heart_convert_pulse(
 
     reg [1:0] state, next_state;
 
-    // State Register (2 D Flip-Flops)
+    // State Register (2 D Flip-Flops) with registered pulse_edge
     always @(posedge CLK or posedge reset) begin
-        if (reset)
-            state <= IDLE;
-        else
+        if (reset) begin
+            state      <= IDLE;
+            pulse_edge <= 1'b0;
+        end else begin
             state <= next_state;
+            // pulse_edge generates High on the 3rd clock cycle when Din=1 is verified
+            if (state == COUNT2 && Din == 1'b1)
+                pulse_edge <= 1'b1;
+            else
+                pulse_edge <= 1'b0;
+        end
     end
 
     // Next State Combinational Logic
@@ -123,9 +130,6 @@ module heart_convert_pulse(
             default: next_state = IDLE;
         endcase
     end
-
-    // Mealy Output Logic: Y = 1 only in COUNT2 when Din = 1
-    assign pulse_edge = (state == COUNT2) & Din;
 
 endmodule
 
@@ -265,7 +269,7 @@ module tb_heart_rate;
         $display("[Time %0t ns] Reset released. Starting simulation...", $time);
 
         // ----------------------------------------------------
-        // Test 1: Noise Glitch (1 clock cycle) -> Should be filtered
+        // Test 1: Noise Glitch (1 clock cycle: 10ns) -> Should be filtered
         // ----------------------------------------------------
         $display("[Time %0t ns] Test 1: 1-cycle noise glitch", $time);
         Din = 1;
@@ -274,7 +278,7 @@ module tb_heart_rate;
         #30;
 
         // ----------------------------------------------------
-        // Test 2: Noise Glitch (2 clock cycles) -> Should be filtered
+        // Test 2: Noise Glitch (2 clock cycles: 20ns) -> Should be filtered
         // ----------------------------------------------------
         $display("[Time %0t ns] Test 2: 2-cycle noise glitch", $time);
         Din = 1;
@@ -283,7 +287,7 @@ module tb_heart_rate;
         #30;
 
         // ----------------------------------------------------
-        // Test 3: Valid Pulse (3 clock cycles) -> Should detect 1 beat
+        // Test 3: Valid Pulse (3 clock cycles: 30ns) -> Should detect 1 beat
         // ----------------------------------------------------
         $display("[Time %0t ns] Test 3: Valid 3-cycle pulse (Beat 1)", $time);
         Din = 1;
@@ -292,7 +296,7 @@ module tb_heart_rate;
         #40;
 
         // ----------------------------------------------------
-        // Test 4: Wide Pulse (6 clock cycles) -> Debounce check
+        // Test 4: Wide Pulse (6 clock cycles: 60ns) -> Debounce check
         // ----------------------------------------------------
         $display("[Time %0t ns] Test 4: Wide pulse (Beat 2)", $time);
         Din = 1;

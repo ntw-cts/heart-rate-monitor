@@ -63,7 +63,7 @@ module heart_convert_pulse(
     input  wire CLK,
     input  wire reset,
     input  wire Din,
-    output wire pulse_edge 
+    output reg  pulse_edge 
 );
     // State definitions (Q1Q0)
     localparam IDLE     = 2'b00;
@@ -73,12 +73,19 @@ module heart_convert_pulse(
 
     reg [1:0] state, next_state;
 
-    // State Register (2 D Flip-Flops)
+    // State Register (2 D Flip-Flops) with registered pulse_edge
     always @(posedge CLK or posedge reset) begin
-        if (reset)
-            state <= IDLE;
-        else
+        if (reset) begin
+            state      <= IDLE;
+            pulse_edge <= 1'b0;
+        end else begin
             state <= next_state;
+            // pulse_edge generates High on the 3rd clock cycle when Din=1 is verified
+            if (state == COUNT2 && Din == 1'b1)
+                pulse_edge <= 1'b1;
+            else
+                pulse_edge <= 1'b0;
+        end
     end
 
     // Next State Combinational Logic
@@ -111,9 +118,6 @@ module heart_convert_pulse(
             default: next_state = IDLE;
         endcase
     end
-
-    // Mealy Output Logic: Y = 1 only in COUNT2 when Din = 1
-    assign pulse_edge = (state == COUNT2) & Din;
 
 endmodule
 

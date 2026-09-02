@@ -1,4 +1,3 @@
-// Top Module: Heart Rate Monitoring System
 module heart_rate_rms(
     input  wire       CLK,
     input  wire       reset,
@@ -13,7 +12,7 @@ module heart_rate_rms(
     reg  [7:0] timer_count;
     wire       pulse_edge;
 
-    // Timer logic: measures interval between consecutive beats for rhythm/AFib detection
+    // Timer logic
     always @(posedge CLK or posedge reset) begin
         if (reset) begin
             timer_count <= 8'b0;
@@ -22,11 +21,11 @@ module heart_rate_rms(
         end else if (timer_count < 8'd255) begin
             timer_count <= timer_count + 8'b1;
         end
-    end
+    end // <--- เพิ่ม end ที่ขาดไป
 
     assign pulse_Detector = pulse_edge;
 
-    // Sub-module 1: Mealy FSM Noise Filter (State Table Step 3)
+    // Sub-module 1: Edge Detector
     heart_convert_pulse insl (
         .CLK(CLK),
         .reset(reset),
@@ -34,17 +33,18 @@ module heart_rate_rms(
         .pulse_edge(pulse_edge)
     );
 
-    // Sub-module 2: BPM Calculator (10-second observation window multiplied by 6)
+    // Sub-module 2: BPM Calculator
     heart_BPM u_bpm_calc (
         .CLK(CLK),
         .reset(reset),
         .pulse_edge(pulse_edge),
+        .timer_count(timer_count),
         .BPM_out(BPM_out),
         .is_Bradycardia(is_Bradycardia),
         .is_Tachycardia(is_Tachycardia)
     );
 
-    // Sub-module 3: Rhythm / AFib Alert Logic
+    // Sub-module 3: Rhythm / AFib Alert
     heart_alert u_rhythm_check (
         .CLK(CLK),
         .reset(reset),
@@ -55,124 +55,71 @@ module heart_rate_rms(
     );
 
 endmodule
-
-
-// Module 1: Mealy-based FSM Noise Filter (Step 2 & Step 3 in Proposal)
-// Requires Din=1 for 3 consecutive clock cycles to detect a valid beat
+// Module 1: Edge Detector
 module heart_convert_pulse(
     input  wire CLK,
     input  wire reset,
     input  wire Din,
     output wire pulse_edge 
 );
-    // State definitions (Q1Q0)
-    localparam IDLE     = 2'b00;
-    localparam COUNT1   = 2'b01;
-    localparam COUNT2   = 2'b10;
-    localparam WAIT_LOW = 2'b11;
+    reg Din_delay;
 
-    reg [1:0] state, next_state;
-
-    // State Register (2 D Flip-Flops)
     always @(posedge CLK or posedge reset) begin
         if (reset)
-            state <= IDLE;
+            Din_delay <= 1'b0;
         else
-            state <= next_state;
+            Din_delay <= Din;
     end
 
-    // Next State Combinational Logic
-    always @(*) begin
-        case (state)
-            IDLE: begin
-                if (Din)
-                    next_state = COUNT1;
-                else
-                    next_state = IDLE;
-            end
-            COUNT1: begin
-                if (Din)
-                    next_state = COUNT2;
-                else
-                    next_state = IDLE;
-            end
-            COUNT2: begin
-                if (Din)
-                    next_state = WAIT_LOW;
-                else
-                    next_state = IDLE;
-            end
-            WAIT_LOW: begin
-                if (Din)
-                    next_state = WAIT_LOW;
-                else
-                    next_state = IDLE;
-            end
-            default: next_state = IDLE;
-        endcase
-    end
-
-    // Mealy Output Logic: Y = 1 only in COUNT2 when Din = 1
-    assign pulse_edge = (state == COUNT2) & Din;
+    assign pulse_edge = Din & (~Din_delay);
 
 endmodule
-
-
-// Module 2: BPM Calculator Logic (10-second window observation)
-module heart_BPM #(
-    parameter WINDOW_LIMIT = 8'd10 // 10-second observation window (configurable)
-)(
+// Module 2: BPM Logic
+module heart_BPM(
     input  wire       CLK,
     input  wire       reset,
     input  wire       pulse_edge,
+    input  wire [7:0] timer_count,
     output reg  [7:0] BPM_out,
     output reg        is_Bradycardia,
     output reg        is_Tachycardia
 );
-    reg  [7:0] window_timer;
-    reg  [7:0] beat_count;
-    wire [7:0] current_total_beats = beat_count + (pulse_edge ? 8'd1 : 8'd0);
-    wire [7:0] calc_bpm            = current_total_beats * 8'd6;
+    wire [7:0] solved_BPM = (timer_count > 8'd0) ? (8'd240 / timer_count) : 8'd0;
 
     always @(posedge CLK or posedge reset) begin
         if (reset) begin
-            window_timer   <= 8'd0;
-            beat_count     <= 8'd0;
             BPM_out        <= 8'd0;
             is_Bradycardia <= 1'b0;
             is_Tachycardia <= 1'b0;
-        end else begin
-            if (window_timer >= WINDOW_LIMIT - 8'd1) begin
-                window_timer   <= 8'd0;
-                BPM_out        <= calc_bpm;
-                is_Bradycardia <= (calc_bpm < 8'd60);
-                is_Tachycardia <= (calc_bpm > 8'd100);
-                beat_count     <= 8'd0;
+        end else if (pulse_edge) begin
+            BPM_out <= solved_BPM;
+            if (solved_BPM < 8'd60) begin
+                is_Bradycardia <= 1'b1;
+                is_Tachycardia <= 1'b0;
+            end else if (solved_BPM > 8'd100) begin
+                is_Bradycardia <= 1'b0;
+                is_Tachycardia <= 1'b1;
             end else begin
-                window_timer <= window_timer + 8'd1;
-                if (pulse_edge) begin
-                    beat_count <= beat_count + 8'd1;
-                end
+                is_Bradycardia <= 1'b0;
+                is_Tachycardia <= 1'b0;
             end
         end
     end
 
 endmodule
-
-
-// Module 3: Rhythm Alert Logic (Arrhythmia / AFib Detection)
+// Module 3: Rhythm Alert Logic
 module heart_alert(
     input  wire       CLK,
     input  wire       reset,
     input  wire       pulse_edge,
     input  wire [7:0] timer_count,
     output reg  [7:0] irregular_count,
-    output reg        is_afib_alert
+    output reg        is_afib_alert // แก้จาก [7:0] เหลือ 1 บิต
 );
     reg [7:0] prev_interval;
 
     wire [7:0] diff      = (timer_count > prev_interval) ? (timer_count - prev_interval) : (prev_interval - timer_count);
-    wire [7:0] tolerance = (prev_interval >> 3); // 12.5% tolerance threshold
+    wire [7:0] tolerance = (prev_interval >> 3); // 12.5%
 
     always @(posedge CLK or posedge reset) begin
         if (reset) begin
@@ -195,5 +142,4 @@ module heart_alert(
             prev_interval <= timer_count;
         end
     end
-
 endmodule
